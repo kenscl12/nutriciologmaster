@@ -1,0 +1,46 @@
+# Build
+bin/
+obj/
+out/
+
+# IDE
+.idea/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# User-specific config (токен бота — не коммитить)
+appsettings.Development.json
+appsettings.*.local.json
+secrets.json
+*.local.json
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Logs
+logs/
+*.log
+
+# Rider
+.idea/
+*.sln.iml
+
+# Test / coverage
+coverage/
+*.lcov
+TestResults/
