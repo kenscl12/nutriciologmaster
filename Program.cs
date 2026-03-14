@@ -25,8 +25,11 @@ var app = builder.Build();
 app.MapGet("/", () => Results.Ok("OK"));
 app.MapGet("/health", () => Results.Ok("OK"));
 
-// Остановка по Enter (только при запуске не в Docker)
-var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-_ = Task.Run(() => { try { Console.ReadLine(); } catch { } lifetime.StopApplication(); });
+// Остановка по Enter только при интерактивном запуске (не в Docker)
+if (Environment.UserInteractive)
+{
+    var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+    _ = Task.Run(() => { try { Console.ReadLine(); } catch { } lifetime.StopApplication(); });
+}
 
 await app.RunAsync();
