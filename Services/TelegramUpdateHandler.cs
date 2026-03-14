@@ -9,7 +9,7 @@ namespace TelegramNutritionMockBot.Services;
 /// <summary>
 /// Обработчик входящих обновлений и ошибок Telegram-бота.
 /// </summary>
-public sealed class TelegramUpdateHandler
+public sealed class TelegramUpdateHandler 
 {
     private readonly INutritionAnalysisService _nutritionAnalysisService;
     private readonly IUserProfileRepository _profileRepository;
