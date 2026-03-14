@@ -1,6 +1,7 @@
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using TelegramNutritionMockBot.Models;
 
 namespace TelegramNutritionMockBot.Services;
 
@@ -9,11 +10,11 @@ namespace TelegramNutritionMockBot.Services;
 /// </summary>
 public sealed class TelegramUpdateHandler
 {
-    private readonly IMockNutritionService _mockNutritionService;
+    private readonly INutritionAnalysisService _nutritionAnalysisService;
 
-    public TelegramUpdateHandler(IMockNutritionService mockNutritionService)
+    public TelegramUpdateHandler(INutritionAnalysisService nutritionAnalysisService)
     {
-        _mockNutritionService = mockNutritionService;
+        _nutritionAnalysisService = nutritionAnalysisService;
     }
 
     public async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken cancellationToken)
@@ -49,8 +50,8 @@ public sealed class TelegramUpdateHandler
             await bot.SendMessage(
                 chatId: chatId,
                 text:
-                    "Привет! Я тестовый бот-консультант по питанию.\n\n" +
-                    "Пришли фото блюда, и я верну mock-оценку калорий.",
+                    "Привет! Я бот-консультант по питанию.\n\n" +
+                    "Пришли фото блюда — я оценю калории и БЖУ по изображению.",
                 cancellationToken: cancellationToken
             );
             return;
@@ -83,21 +84,34 @@ public sealed class TelegramUpdateHandler
             .OrderByDescending(p => p.FileSize ?? 0)
             .First();
 
-        // Здесь можно было бы скачать файл:
-        // var file = await bot.GetFile(largestPhoto.FileId, cancellationToken);
-        // Но для mock-версии это не нужно.
+        await using var imageStream = new MemoryStream();
+        var file = await bot.GetFile(largestPhoto.FileId, cancellationToken);
+        await bot.DownloadFile(file.FilePath!, imageStream, cancellationToken);
+        imageStream.Position = 0;
 
-        var mock = _mockNutritionService.GetMockNutrition();
+        MockNutritionResult result;
+        try
+        {
+            result = await _nutritionAnalysisService.AnalyzeDishAsync(imageStream, "image/jpeg", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await bot.SendMessage(
+                chatId: chatId,
+                text: $"Не удалось проанализировать фото: {ex.Message}. Попробуй другое фото.",
+                cancellationToken: cancellationToken
+            );
+            return;
+        }
 
         var reply =
-            $"🍽 Блюдо: {mock.DishName}\n" +
-            $"⚖️ Примерный вес: {mock.WeightGrams} г\n" +
-            $"🔥 Калории: {mock.Calories} ккал\n" +
-            $"🥩 Белки: {mock.Protein} г\n" +
-            $"🧈 Жиры: {mock.Fat} г\n" +
-            $"🍞 Углеводы: {mock.Carbs} г\n\n" +
-            $"Комментарий: {mock.Comment}\n\n" +
-            $"Это mock-ответ. Фото пока не анализируется по-настоящему.";
+            $"🍽 Блюдо: {result.DishName}\n" +
+            $"⚖️ Примерный вес: {result.WeightGrams} г\n" +
+            $"🔥 Калории: {result.Calories} ккал\n" +
+            $"🥩 Белки: {result.Protein} г\n" +
+            $"🧈 Жиры: {result.Fat} г\n" +
+            $"🍞 Углеводы: {result.Carbs} г\n\n" +
+            $"Комментарий: {result.Comment}";
 
         await bot.SendMessage(
             chatId: chatId,

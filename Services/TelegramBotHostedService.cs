@@ -48,7 +48,7 @@ public sealed class TelegramBotHostedService : IHostedService
         {
             try
             {
-                var me = await _client.GetMeAsync(cancellationToken: _cts.Token);
+                var me = await _client.GetMe(cancellationToken: _cts.Token);
                 Console.WriteLine($"Бот @{me.Username} запущен.");
                 Console.WriteLine("Нажми Enter для остановки.");
             }
@@ -60,7 +60,7 @@ public sealed class TelegramBotHostedService : IHostedService
 
         _client.StartReceiving(
             updateHandler: _updateHandler.HandleUpdateAsync,
-            pollingErrorHandler: TelegramUpdateHandler.HandleErrorAsync,
+            errorHandler: TelegramUpdateHandler.HandleErrorAsync,
             receiverOptions: receiverOptions,
             cancellationToken: _cts.Token
         );
