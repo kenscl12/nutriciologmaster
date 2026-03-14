@@ -1,9 +1,9 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using TelegramNutritionMockBot.Configuration;
 using TelegramNutritionMockBot.Services;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.UseUrls("http://*:5090");
 
 builder.Services.Configure<BotOptions>(builder.Configuration.GetSection(BotOptions.SectionName));
 builder.Services.Configure<OpenAIOptions>(builder.Configuration.GetSection(OpenAIOptions.SectionName));
@@ -15,13 +15,18 @@ builder.Services.AddHttpClient(ChatGptNutritionService.HttpClientName, (sp, clie
 });
 
 builder.Services.AddSingleton<INutritionAnalysisService, ChatGptNutritionService>();
+builder.Services.AddSingleton<IUserProfileRepository, UserProfileRepository>();
+builder.Services.AddSingleton<IOnboardingStateStore, OnboardingStateStore>();
 builder.Services.AddSingleton<TelegramUpdateHandler>();
 builder.Services.AddHostedService<TelegramBotHostedService>();
 
-var host = builder.Build();
+var app = builder.Build();
 
-// Остановка по Enter
-var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
-_ = Task.Run(() => { Console.ReadLine(); lifetime.StopApplication(); });
+app.MapGet("/", () => Results.Ok("OK"));
+app.MapGet("/health", () => Results.Ok("OK"));
 
-await host.RunAsync();
+// Остановка по Enter (только при запуске не в Docker)
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+_ = Task.Run(() => { try { Console.ReadLine(); } catch { } lifetime.StopApplication(); });
+
+await app.RunAsync();

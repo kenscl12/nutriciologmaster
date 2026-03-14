@@ -41,7 +41,7 @@ public sealed class TelegramBotHostedService : IHostedService
 
         var receiverOptions = new ReceiverOptions
         {
-            AllowedUpdates = Array.Empty<Telegram.Bot.Types.Enums.UpdateType>()
+            AllowedUpdates = [Telegram.Bot.Types.Enums.UpdateType.Message, Telegram.Bot.Types.Enums.UpdateType.CallbackQuery]
         };
 
         _ = Task.Run(async () =>

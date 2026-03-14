@@ -12,8 +12,6 @@ out/
 *.sln.docstates
 
 # User-specific config (токен бота — не коммитить)
-appsettings.Development.json
-appsettings.*.local.json
 secrets.json
 *.local.json
 
