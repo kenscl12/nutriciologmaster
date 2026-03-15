@@ -8,6 +8,8 @@ RUN dotnet publish -c Release -o out
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/out ./
+# Для WebApplication среда берётся из ASPNETCORE_ENVIRONMENT (не DOTNET_ENVIRONMENT)
+ENV ASPNETCORE_ENVIRONMENT=Production
 ENV DOTNET_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:5090
 EXPOSE 5090

@@ -24,6 +24,8 @@ var app = builder.Build();
 
 app.MapGet("/", () => Results.Ok("OK"));
 app.MapGet("/health", () => Results.Ok("OK"));
+// Проверка: какая среда и конфиг загружены (для отладки)
+app.MapGet("/env", () => new { env = app.Environment.EnvironmentName });
 
 // Остановка по Enter только при интерактивном запуске (не в Docker)
 //if (Environment.UserInteractive)
