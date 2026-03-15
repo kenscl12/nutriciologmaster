@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -12,24 +13,28 @@ namespace TelegramNutritionMockBot.Services;
 public sealed class TelegramUpdateHandler 
 {
     private readonly INutritionAnalysisService _nutritionAnalysisService;
-    private readonly IUserProfileRepository _profileRepository;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOnboardingStateStore _onboardingStore;
 
     public TelegramUpdateHandler(
         INutritionAnalysisService nutritionAnalysisService,
-        IUserProfileRepository profileRepository,
+        IServiceScopeFactory scopeFactory,
         IOnboardingStateStore onboardingStore)
     {
         _nutritionAnalysisService = nutritionAnalysisService;
-        _profileRepository = profileRepository;
+        _scopeFactory = scopeFactory;
         _onboardingStore = onboardingStore;
     }
 
     public async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken cancellationToken)
     {
+        using var scope = _scopeFactory.CreateScope();
+        var profileRepo = scope.ServiceProvider.GetRequiredService<IUserProfileRepository>();
+        var mealRepo = scope.ServiceProvider.GetRequiredService<IMealRepository>();
+
         if (update.CallbackQuery is { } callback)
         {
-            await HandleCallbackQueryAsync(bot, callback, cancellationToken);
+            await HandleCallbackQueryAsync(bot, callback, profileRepo, cancellationToken);
             return;
         }
 
@@ -40,13 +45,13 @@ public sealed class TelegramUpdateHandler
 
         if (update.Message.Text is not null)
         {
-            await HandleTextMessageAsync(bot, chatId, update.Message.Text, cancellationToken);
+            await HandleTextMessageAsync(bot, chatId, update.Message.Text, profileRepo, cancellationToken);
             return;
         }
 
         if (update.Message.Photo is { Length: > 0 })
         {
-            await HandlePhotoAsync(bot, chatId, update.Message.Photo, cancellationToken);
+            await HandlePhotoAsync(bot, chatId, update.Message.Photo, profileRepo, mealRepo, cancellationToken);
             return;
         }
 
@@ -57,7 +62,7 @@ public sealed class TelegramUpdateHandler
         );
     }
 
-    private async Task HandleCallbackQueryAsync(ITelegramBotClient bot, CallbackQuery callback, CancellationToken cancellationToken)
+    private async Task HandleCallbackQueryAsync(ITelegramBotClient bot, CallbackQuery callback, IUserProfileRepository profileRepo, CancellationToken cancellationToken)
     {
         if (callback.Message?.Chat is null)
             return;
@@ -105,15 +110,15 @@ public sealed class TelegramUpdateHandler
                 "act_very" => ActivityLevel.VeryActive,
                 _ => ActivityLevel.Moderate
             };
-            await FinishOnboardingAsync(bot, chatId, state, cancellationToken);
+            await FinishOnboardingAsync(bot, chatId, state, profileRepo, cancellationToken);
         }
     }
 
-    private async Task HandleTextMessageAsync(ITelegramBotClient bot, long chatId, string text, CancellationToken cancellationToken)
+    private async Task HandleTextMessageAsync(ITelegramBotClient bot, long chatId, string text, IUserProfileRepository profileRepo, CancellationToken cancellationToken)
     {
         if (text == "/start")
         {
-            var profile = await _profileRepository.GetByChatIdAsync(chatId, cancellationToken);
+            var profile = await profileRepo.GetByChatIdAsync(chatId, cancellationToken);
             if (profile is not null)
             {
                 var dailyGoal = DailyGoalCalculator.Calculate(profile);
@@ -300,7 +305,7 @@ public sealed class TelegramUpdateHandler
         await bot.SendMessage(chatId, "Как часто ты занимаешься спортом или физической активностью?", replyMarkup: keyboard, cancellationToken: ct);
     }
 
-    private async Task FinishOnboardingAsync(ITelegramBotClient bot, long chatId, OnboardingState state, CancellationToken cancellationToken)
+    private async Task FinishOnboardingAsync(ITelegramBotClient bot, long chatId, OnboardingState state, IUserProfileRepository profileRepo, CancellationToken cancellationToken)
     {
         if (state.Gender is null || state.Age is null || state.HeightCm is null || state.WeightKg is null || state.Goal is null || state.ActivityLevel is null)
         {
@@ -319,7 +324,7 @@ public sealed class TelegramUpdateHandler
             ActivityLevel = state.ActivityLevel.Value
         };
 
-        await _profileRepository.SaveAsync(profile, cancellationToken);
+        await profileRepo.SaveAsync(profile, cancellationToken);
         await _onboardingStore.ClearAsync(chatId, cancellationToken);
 
         var dailyGoal = DailyGoalCalculator.Calculate(profile);
@@ -336,7 +341,7 @@ public sealed class TelegramUpdateHandler
         $"🥑 Жиры: {g.FatGrams} г\n" +
         $"🍞 Углеводы: {g.CarbsGrams} г";
 
-    private async Task HandlePhotoAsync(ITelegramBotClient bot, long chatId, Telegram.Bot.Types.PhotoSize[] photoSizes, CancellationToken cancellationToken)
+    private async Task HandlePhotoAsync(ITelegramBotClient bot, long chatId, Telegram.Bot.Types.PhotoSize[] photoSizes, IUserProfileRepository profileRepo, IMealRepository mealRepo, CancellationToken cancellationToken)
     {
         var state = await _onboardingStore.GetAsync(chatId, cancellationToken);
         if (state is not null && state.Step != OnboardingStep.None && state.Step != OnboardingStep.Done)
@@ -378,12 +383,23 @@ public sealed class TelegramUpdateHandler
             $"🍞 Углеводы: {result.Carbs} г\n\n" +
             $"Комментарий: {result.Comment}";
 
-        var profile = await _profileRepository.GetByChatIdAsync(chatId, cancellationToken);
+        var profile = await profileRepo.GetByChatIdAsync(chatId, cancellationToken);
         if (profile is not null)
         {
             var daily = DailyGoalCalculator.Calculate(profile);
             var remaining = $"Осталось до дневной нормы: {Math.Max(0, daily.Calories - result.Calories)} ккал.";
             reply += "\n\n" + remaining;
+
+            await mealRepo.AddMealAsync(
+                chatId,
+                DateOnly.FromDateTime(DateTime.UtcNow),
+                result.DishName,
+                result.Calories,
+                result.Protein,
+                result.Fat,
+                result.Carbs,
+                largestPhoto.FileId,
+                cancellationToken);
         }
 
         await bot.SendMessage(
