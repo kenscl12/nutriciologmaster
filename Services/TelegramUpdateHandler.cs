@@ -48,7 +48,7 @@ public sealed class TelegramUpdateHandler
 
         if (update.Message.Text is not null)
         {
-            await HandleTextMessageAsync(bot, chatId, update.Message.Text, profileRepo, cancellationToken);
+            await HandleTextMessageAsync(bot, chatId, update.Message.Text, profileRepo, mealRepo, cancellationToken);
             return;
         }
 
@@ -117,7 +117,7 @@ public sealed class TelegramUpdateHandler
         }
     }
 
-    private async Task HandleTextMessageAsync(ITelegramBotClient bot, long chatId, string text, IUserProfileRepository profileRepo, CancellationToken cancellationToken)
+    private async Task HandleTextMessageAsync(ITelegramBotClient bot, long chatId, string text, IUserProfileRepository profileRepo, IMealRepository mealRepo, CancellationToken cancellationToken)
     {
         if (text == "/start")
         {
@@ -250,23 +250,30 @@ public sealed class TelegramUpdateHandler
             }
         }
 
+        if (text == "/day")
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var meals = await mealRepo.GetMealsForDateAsync(chatId, today, cancellationToken);
+            var message = FormatDayMeals(today, meals);
+            await bot.SendMessage(chatId: chatId, text: message, cancellationToken: cancellationToken);
+            return;
+        }
+
         if (text == "/help")
         {
-            await bot.SendMessage(
-                chatId: chatId,
-                text:
-                    "Команды:\n" +
-                    "/start — показать дневную цель\n" +
-                    "/help — помощь\n\n" +
-                    "Отправь фото блюда — оценю калории и БЖУ.",
-                cancellationToken: cancellationToken
-            );
+            const string helpText =
+                "Команды:\n" +
+                "/start — дневная цель (норма КБЖУ)\n" +
+                "/day — список блюд за сегодня\n" +
+                "/help — эта справка\n\n" +
+                "Отправь фото блюда — оценю калории и БЖУ и добавлю в дневник.";
+            await bot.SendMessage(chatId: chatId, text: helpText, cancellationToken: cancellationToken);
             return;
         }
 
         await bot.SendMessage(
             chatId: chatId,
-            text: "Отправь фото блюда для анализа или /start для дневной цели.",
+            text: "Отправь фото блюда для анализа, /start для дневной цели или /day — что ел сегодня.",
             cancellationToken: cancellationToken
         );
     }
@@ -343,6 +350,30 @@ public sealed class TelegramUpdateHandler
         $"🥩 Белки: {g.ProteinGrams} г\n" +
         $"🥑 Жиры: {g.FatGrams} г\n" +
         $"🍞 Углеводы: {g.CarbsGrams} г";
+
+    private static string FormatDayMeals(DateOnly date, IReadOnlyList<MealEntry> meals)
+    {
+        var dateStr = date.ToString("dd.MM.yyyy");
+        if (meals.Count == 0)
+            return $"📅 Блюда за {dateStr}\n\nСегодня пока ничего не записано. Пришли фото блюда — добавлю в дневник!";
+
+        var lines = new List<string> { $"📅 Блюда за {dateStr}\n" };
+        var totalCal = 0;
+        var totalP = 0;
+        var totalF = 0;
+        var totalC = 0;
+        for (var i = 0; i < meals.Count; i++)
+        {
+            var m = meals[i];
+            totalCal += m.Calories;
+            totalP += m.Protein;
+            totalF += m.Fat;
+            totalC += m.Carbs;
+            lines.Add($"{i + 1}. 🍽 {m.MealName} — {m.Calories} ккал (Б {m.Protein} Ж {m.Fat} У {m.Carbs})");
+        }
+        lines.Add($"\n📊 Итого: {totalCal} ккал | Белки {totalP} г | Жиры {totalF} г | Углеводы {totalC} г");
+        return string.Join("\n", lines);
+    }
 
     private async Task HandlePhotoAsync(ITelegramBotClient bot, long chatId, Telegram.Bot.Types.PhotoSize[] photoSizes, IUserProfileRepository profileRepo, IMealRepository mealRepo, CancellationToken cancellationToken)
     {
