@@ -12,7 +12,7 @@ public sealed class MealRepository : IMealRepository
         _db = db;
     }
 
-    public async Task AddMealAsync(long telegramChatId, DateOnly date, string mealName, int calories, int protein, int fat, int carbs, string? photoFileId, CancellationToken cancellationToken = default)
+    public async Task AddMealAsync(long telegramChatId, DateOnly date, string mealName, int calories, int protein, int fat, int carbs, CancellationToken cancellationToken = default)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.TelegramChatId == telegramChatId, cancellationToken);
         if (user is null)
@@ -26,8 +26,7 @@ public sealed class MealRepository : IMealRepository
             Calories = calories,
             Protein = protein,
             Fat = fat,
-            Carbs = carbs,
-            Photo = photoFileId
+            Carbs = carbs
         });
         await _db.SaveChangesAsync(cancellationToken);
     }

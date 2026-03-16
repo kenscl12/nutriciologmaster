@@ -13,15 +13,18 @@ namespace TelegramNutritionMockBot.Services;
 public sealed class TelegramUpdateHandler 
 {
     private readonly INutritionAnalysisService _nutritionAnalysisService;
+    private readonly ISmartCommentService _smartCommentService;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOnboardingStateStore _onboardingStore;
 
     public TelegramUpdateHandler(
         INutritionAnalysisService nutritionAnalysisService,
+        ISmartCommentService smartCommentService,
         IServiceScopeFactory scopeFactory,
         IOnboardingStateStore onboardingStore)
     {
         _nutritionAnalysisService = nutritionAnalysisService;
+        _smartCommentService = smartCommentService;
         _scopeFactory = scopeFactory;
         _onboardingStore = onboardingStore;
     }
@@ -374,6 +377,9 @@ public sealed class TelegramUpdateHandler
             return;
         }
 
+        var profile = await profileRepo.GetByChatIdAsync(chatId, cancellationToken);
+        var daily = profile is not null ? DailyGoalCalculator.Calculate(profile) : null;
+
         var reply =
             $"🍽 Блюдо: {result.DishName}\n" +
             $"⚖️ Примерный вес: {result.WeightGrams} г\n" +
@@ -383,10 +389,11 @@ public sealed class TelegramUpdateHandler
             $"🍞 Углеводы: {result.Carbs} г\n\n" +
             $"Комментарий: {result.Comment}";
 
-        var profile = await profileRepo.GetByChatIdAsync(chatId, cancellationToken);
-        if (profile is not null)
+        if (daily is not null)
         {
-            var daily = DailyGoalCalculator.Calculate(profile);
+            var timeOfDay = TimeOnly.FromDateTime(DateTime.UtcNow);
+            var smartComment = _smartCommentService.GetComment(daily, result, timeOfDay);
+            reply += $"\n\n{smartComment}";
             var remaining = $"Осталось до дневной нормы: {Math.Max(0, daily.Calories - result.Calories)} ккал.";
             reply += "\n\n" + remaining;
 
@@ -398,7 +405,6 @@ public sealed class TelegramUpdateHandler
                 result.Protein,
                 result.Fat,
                 result.Carbs,
-                largestPhoto.FileId,
                 cancellationToken);
         }
 

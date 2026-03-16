@@ -29,6 +29,7 @@ builder.Services.AddHttpClient(ChatGptNutritionService.HttpClientName, (sp, clie
 });
 
 builder.Services.AddSingleton<INutritionAnalysisService, ChatGptNutritionService>();
+builder.Services.AddSingleton<ISmartCommentService, SmartCommentService>();
 builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
 builder.Services.AddScoped<IMealRepository, MealRepository>();
 builder.Services.AddSingleton<IOnboardingStateStore, OnboardingStateStore>();
