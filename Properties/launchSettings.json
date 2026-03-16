@@ -8,6 +8,14 @@
       },
       "applicationUrl": "https://localhost:50473;http://localhost:50474"
     },
+    "Development": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "http://localhost:5090"
+    },
     "Production": {
       "commandName": "Project",
       "launchBrowser": true,
