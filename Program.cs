@@ -9,6 +9,15 @@ builder.WebHost.UseUrls("http://*:5090");
 
 builder.Services.Configure<BotOptions>(builder.Configuration.GetSection(BotOptions.SectionName));
 builder.Services.Configure<OpenAIOptions>(builder.Configuration.GetSection(OpenAIOptions.SectionName));
+// Если переменная окружения OPENAI_API_KEY задана — она перекрывает значение из конфига
+builder.Services.PostConfigure<OpenAIOptions>(options =>
+{
+    var envKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+    if (!string.IsNullOrWhiteSpace(envKey))
+    {
+        options.ApiKey = envKey;
+    }
+});
 
 var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(conn));
